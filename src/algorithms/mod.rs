@@ -2,6 +2,8 @@ use crate::prelude::*;
 
 pub struct BinaryTree;
 pub struct Sidewinder;
+pub struct AldousBroder;
+pub struct Wilsons;
 
 pub trait Algorithm {
     fn on(&mut self, grid: &mut Grid);
@@ -31,7 +33,7 @@ impl Algorithm for BinaryTree {
         }
 
         for (cell_point, neighbor_point) in actions.iter() {
-            grid.link(*cell_point, *neighbor_point);
+            grid.link(*cell_point, *neighbor_point, true);
         }
     }
 }
@@ -67,7 +69,63 @@ impl Algorithm for Sidewinder {
         }
 
         for (cell_point, neighbor_point) in actions.iter() {
-            grid.link(*cell_point, *neighbor_point);
+            grid.link(*cell_point, *neighbor_point, true);
+        }
+    }
+}
+
+impl Algorithm for AldousBroder {
+    fn on(&mut self, grid: &mut Grid) {
+        let mut random = rand::thread_rng();
+
+        let mut cell = *grid.random_cell().unwrap();
+        let mut unvisited = grid.width * grid.height - 1;
+
+        while unvisited > 0 {
+            let neighbors = cell.neighbors(grid);
+            let random_index = random.gen_range(0..neighbors.len());
+            let neighbor = neighbors.get(random_index).unwrap();
+
+            if neighbor.links().len() == 0 {
+                grid.link(cell.point, neighbor.point, true);
+                unvisited -= 1;
+            }
+
+            cell = neighbor.clone();
+        }
+    }
+}
+
+impl Algorithm for Wilsons {
+    fn on(&mut self, grid: &mut Grid) {
+        let mut unvisited = grid.cells.clone();
+        let mut random = rand::thread_rng();
+        let index = random.gen_range(0..unvisited.len());
+
+        unvisited.remove(index);
+
+        while !unvisited.is_empty() {
+            let index = random.gen_range(0..unvisited.len());
+            let mut cell = *unvisited.get(index).unwrap();
+            let mut path = vec![cell.clone()];
+
+            while unvisited.contains(&cell) {
+                let index = random.gen_range(0..cell.neighbors(grid).len());
+                cell = *cell.neighbors(grid).get(index).unwrap();
+
+                let position = path.iter().position(|c| c == &cell);
+
+                if let Some(position) = position {
+                    path.truncate(position + 1);
+                } else {
+                    path.push(cell.clone());
+                }
+            }
+
+            for i in 0..path.len() - 1 {
+                grid.link(path[i].point, path[i + 1].point, true);
+                unvisited.retain(|c| c != &path[i]);
+            }
         }
     }
 }

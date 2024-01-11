@@ -92,7 +92,7 @@ impl Cell {
 
     pub fn neighbors(&self, grid: &Grid) -> Vec<Cell> {
         let mut neighbors = Vec::new();
-
+        
         if let Some(north) = grid.get(self.north.point) {
             neighbors.push(north.clone());
         }
@@ -140,12 +140,16 @@ impl Grid {
         }
     }
 
-    pub fn link(&mut self, a: Point, b: Point) {
+    pub fn link(&mut self, a: Point, b: Point, bidi: bool) {
         let index_a = self.point_to_index(a);
         let index_b = self.point_to_index(b);
 
         if let Some(index_a) = index_a {
             self.cells[index_a].link(b);
+        }
+
+        if !bidi {
+            return;
         }
 
         if let Some(index_b) = index_b {
@@ -330,30 +334,29 @@ impl Grid {
                             imgbuf.put_pixel(x as u32, y as u32, color);
                         }
                     }
-                    return;
-                }
-
-                if !cell.linked(self.get(cell.north.point.clone())) {
-                    for x in x1..x2 {
-                        imgbuf.put_pixel(x as u32, y1 as u32, BLACK);
+                } else {
+                    if !cell.linked(self.get(cell.north.point.clone())) {
+                        for x in x1..x2 {
+                            imgbuf.put_pixel(x as u32, y1 as u32, BLACK);
+                        }
                     }
-                }
 
-                if !cell.linked(self.get(cell.west.point.clone())) {
-                    for y in y1..y2 {
-                        imgbuf.put_pixel(x1 as u32, y as u32, BLACK);
+                    if !cell.linked(self.get(cell.west.point.clone())) {
+                        for y in y1..y2 {
+                            imgbuf.put_pixel(x1 as u32, y as u32, BLACK);
+                        }
                     }
-                }
 
-                if !cell.linked(self.get(cell.east.point.clone())) {
-                    for y in y1..y2 {
-                        imgbuf.put_pixel(x2 as u32, y as u32, BLACK);
+                    if !cell.linked(self.get(cell.east.point.clone())) {
+                        for y in y1..y2 {
+                            imgbuf.put_pixel(x2 as u32, y as u32, BLACK);
+                        }
                     }
-                }
 
-                if !cell.linked(self.get(cell.south.point.clone())) {
-                    for x in x1..x2 {
-                        imgbuf.put_pixel(x as u32, y2 as u32, BLACK);
+                    if !cell.linked(self.get(cell.south.point.clone())) {
+                        for x in x1..x2 {
+                            imgbuf.put_pixel(x as u32, y2 as u32, BLACK);
+                        }
                     }
                 }
             }

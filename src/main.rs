@@ -34,9 +34,9 @@ mod prelude {
     pub use image::*;
     pub use rand::Rng;
 
-    pub const GRID_WIDTH: usize = 10;
-    pub const GRID_HEIGHT: usize = 10;
-    pub const ALGORITHM: &str = name_of!(BinaryTree);
+    pub const GRID_WIDTH: usize = 8;
+    pub const GRID_HEIGHT: usize = 8;
+    pub const ALGORITHM: &str = name_of!(Wilsons);
     pub const WHITE: Rgb<u8> = image::Rgb([255u8, 255u8, 255u8]);
     pub const BLACK: Rgb<u8> = image::Rgb([0u8, 0u8, 0u8]);
 }
@@ -44,15 +44,17 @@ mod prelude {
 use prelude::*;
 
 fn main() {
-    generate_normal_maze();
+    //generate_normal_maze();
     generate_picture_maze();
-    draw_max_distance_maze();
+    //draw_max_distance_maze();
 }
 
 fn get_algorithm() -> Box<dyn Algorithm> {
     match ALGORITHM {
         "BinaryTree" => Box::new(BinaryTree),
         "Sidewinder" => Box::new(Sidewinder),
+        "AldousBroder" => Box::new(AldousBroder),
+        "Wilsons" => Box::new(Wilsons),
         _ => panic!("Algorithm not found"),
     }
 }
@@ -70,8 +72,8 @@ fn generate_normal_maze() {
 fn generate_picture_maze() {
     let mut grid = Grid::new(GRID_WIDTH, GRID_HEIGHT);
     let mut algorithm = get_algorithm();
-
     algorithm.on(&mut grid);
+
     let new_distances = Distances::new(Point::new(
         (grid.width / 2) as i32,
         (grid.height / 2) as i32,
