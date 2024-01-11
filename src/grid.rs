@@ -17,71 +17,6 @@ pub struct Cell {
     pub west: NeighborPoint,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Distances {
-    root: Point,
-    cells: HashMap<Point, usize>,
-}
-
-impl Distances {
-    pub fn new(root: Point) -> Self {
-        let mut cells = HashMap::new();
-        cells.insert(root, 0);
-        Self { root, cells }
-    }
-
-    pub fn distance(&self, point: Point) -> Option<usize> {
-        return self.cells.get(&point).copied();
-    }
-
-    pub fn compute(&mut self, grid: Grid) -> &mut Self {
-        let mut frontier = vec![self.root];
-
-        while !frontier.is_empty() {
-            let mut new_frontier = Vec::new();
-            
-            for point in frontier {
-                let cell = grid.get(point);
-
-                if cell.is_none() {
-                    continue;
-                }
-
-                for link in cell.unwrap().links() {
-                    if self.cells.contains_key(&link) {
-                        continue;
-                    }
-
-                    self.cells.insert(link, self.distance(point).unwrap() + 1);
-                    new_frontier.push(link);
-                }
-            }
-
-            frontier = new_frontier;
-        }
-
-        return self;
-    }
-
-    pub fn path_to(&self, grid: &Grid, goal: Point) -> Self {
-        let mut current = goal;
-        let mut breadcrumbs = Distances::new(self.root);
-        breadcrumbs.cells.insert(current, self.distance(current).unwrap());
-
-        while current != self.root {
-            for neighbor in grid.get(current).unwrap().links() {
-                if self.distance(neighbor) < self.distance(current) {
-                    breadcrumbs.cells.insert(neighbor, self.distance(neighbor).unwrap());
-                    current = neighbor;
-                    break;
-                }
-            }
-        }
-
-        return breadcrumbs;
-    }
-}
-
 #[allow(dead_code)]
 impl Cell {
     pub fn new(point: Point) -> Self {
@@ -183,7 +118,7 @@ pub struct Grid {
     pub width: usize,
     pub height: usize,
     pub cells: Vec<Cell>,
-    pub distances: Distances
+    pub distances: Distances,
 }
 
 #[allow(dead_code)]
@@ -201,7 +136,7 @@ impl Grid {
             width,
             height,
             cells,
-            distances: Distances::new(Point::new(0, 0))
+            distances: Distances::new(Point::new(0, 0)),
         }
     }
 
@@ -254,16 +189,6 @@ impl Grid {
             }
         }
         result.into_iter().rev().collect()
-    }
-
-    pub fn contents_of(&self, cell: Cell) -> String {
-        let distance = self.distances.distance(cell.point);
-        
-        if distance.is_some() {
-            return Grid::format_radix(distance.unwrap() as u128, 36);
-        }
-
-        return String::from(" ");
     }
 
     pub fn get(&self, point: Point) -> Option<&Cell> {
@@ -354,48 +279,92 @@ impl Grid {
         println!("{}", output);
     }
 
+    pub fn contents_of(&self, cell: Cell) -> String {
+        let distance = self.distances.distance(cell.point);
+
+        if distance.is_some() {
+            return Grid::format_radix(distance.unwrap() as u128, 36);
+        }
+
+        return String::from(" ");
+    }
+
+    pub fn background_color_for(&self, cell: &Cell) -> Rgb<u8> {
+        let distance = self.distances.distance(cell.point);
+
+        if distance.is_none() {
+            return BLACK;
+        }
+
+        let (max_distance, _) = self.distances.max(self);
+        let intensity = (max_distance - distance.unwrap()) as f64 / max_distance as f64;
+        let dark = (255.0 * intensity) as u8;
+        let bright = 128 + (127.0 * intensity) as u8;
+        let color = image::Rgb([dark, bright, dark]);
+
+        return color;
+    }
+
     pub fn to_png(&self, size: usize) {
         let img_width = self.width * size + 1;
         let img_height = self.height * size + 1;
 
-        let background = image::Rgb([255u8, 255u8, 255u8]);
-        let wall = image::Rgb([0u8, 0u8, 0u8]);
-
         let mut imgbuf =
             image::ImageBuffer::from_fn(img_width as u32, img_height as u32, |_, _| {
-                return background;
+                return WHITE;
             });
 
-        for cell in self.iter() {
-            let x1 = cell.point.x * size as i32;
-            let y1 = cell.point.y * size as i32;
-            let x2 = (cell.point.x + 1) * size as i32;
-            let y2 = (cell.point.y + 1) * size as i32;
+        for mode in vec!["background", "walls"] {
+            for cell in self.iter() {
+                let (x1, x2, y1, y2) = (
+                    cell.point.x * size as i32,
+                    (cell.point.x + 1) * size as i32,
+                    cell.point.y * size as i32,
+                    (cell.point.y + 1) * size as i32,
+                );
 
-            if !cell.linked(self.get(cell.north.point.clone())) {
-                for x in x1..x2 {
-                    imgbuf.put_pixel(x as u32, y1 as u32, wall);
+                if mode == "background" {
+                    let color = self.background_color_for(cell);
+                    for x in x1..x2 {
+                        for y in y1..y2 {
+                            imgbuf.put_pixel(x as u32, y as u32, color);
+                        }
+                    }
+                    return;
                 }
-            }
 
-            if !cell.linked(self.get(cell.west.point.clone())) {
-                for y in y1..y2 {
-                    imgbuf.put_pixel(x1 as u32, y as u32, wall);
+                if !cell.linked(self.get(cell.north.point.clone())) {
+                    for x in x1..x2 {
+                        imgbuf.put_pixel(x as u32, y1 as u32, BLACK);
+                    }
                 }
-            }
 
-            if !cell.linked(self.get(cell.east.point.clone())) {
-                for y in y1..y2 {
-                    imgbuf.put_pixel(x2 as u32, y as u32, wall);
+                if !cell.linked(self.get(cell.west.point.clone())) {
+                    for y in y1..y2 {
+                        imgbuf.put_pixel(x1 as u32, y as u32, BLACK);
+                    }
                 }
-            }
 
-            if !cell.linked(self.get(cell.south.point.clone())) {
-                for x in x1..x2 {
-                    imgbuf.put_pixel(x as u32, y2 as u32, wall);
+                if !cell.linked(self.get(cell.east.point.clone())) {
+                    for y in y1..y2 {
+                        imgbuf.put_pixel(x2 as u32, y as u32, BLACK);
+                    }
+                }
+
+                if !cell.linked(self.get(cell.south.point.clone())) {
+                    for x in x1..x2 {
+                        imgbuf.put_pixel(x as u32, y2 as u32, BLACK);
+                    }
                 }
             }
         }
+
+        // Put a pixel at the bottom right
+        imgbuf.put_pixel(
+            (self.width * size) as u32,
+            (self.height * size) as u32,
+            BLACK,
+        );
 
         let path = Path::new("maze.png");
         let _ = imgbuf.save(path).unwrap();
