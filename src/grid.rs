@@ -92,7 +92,7 @@ impl Cell {
 
     pub fn neighbors(&self, grid: &Grid) -> Vec<Cell> {
         let mut neighbors = Vec::new();
-        
+
         if let Some(north) = grid.get(self.north.point) {
             neighbors.push(north.clone());
         }
@@ -192,7 +192,8 @@ impl Grid {
                 break;
             }
         }
-        result.into_iter().rev().collect()
+
+        return result.into_iter().rev().collect();
     }
 
     pub fn get(&self, point: Point) -> Option<&Cell> {
@@ -201,6 +202,14 @@ impl Grid {
 
     pub fn get_mut(&mut self, point: Point) -> Option<&mut Cell> {
         return self.cells.iter_mut().find(|cell| cell.point == point);
+    }
+
+    pub fn dead_ends(&self) -> Vec<&Cell> {
+        return self
+            .cells
+            .iter()
+            .filter(|cell| cell.links().len() == 1)
+            .collect();
     }
 
     pub fn random_cell(&self) -> Option<&Cell> {

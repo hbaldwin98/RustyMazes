@@ -4,6 +4,8 @@ pub struct BinaryTree;
 pub struct Sidewinder;
 pub struct AldousBroder;
 pub struct Wilsons;
+pub struct HuntAndKill;
+pub struct RecursiveBacktracker;
 
 pub trait Algorithm {
     fn on(&mut self, grid: &mut Grid);
@@ -125,6 +127,83 @@ impl Algorithm for Wilsons {
             for i in 0..path.len() - 1 {
                 grid.link(path[i].point, path[i + 1].point, true);
                 unvisited.retain(|c| c != &path[i]);
+            }
+        }
+    }
+}
+
+impl Algorithm for HuntAndKill {
+    fn on(&mut self, grid: &mut Grid) {
+        let mut random = rand::thread_rng();
+        let mut current = Some(*grid.random_cell().unwrap());
+
+        while current.is_some() {
+            let neighbors = current.unwrap().neighbors(grid);
+            let mut unvisited_neighbors = Vec::new();
+
+            for neighbor in neighbors {
+                if neighbor.links().is_empty() {
+                    unvisited_neighbors.push(neighbor);
+                }
+            }
+
+            if !unvisited_neighbors.is_empty() {
+                let index = random.gen_range(0..unvisited_neighbors.len());
+                let neighbor = *unvisited_neighbors.get(index).unwrap();
+                grid.link(current.unwrap().point, neighbor.point, true);
+                current = Some(neighbor);
+            } else {
+                let cells = grid.cells.clone();
+
+                current = None;
+
+                for cell in cells.iter() {
+                    let mut visited_neighors = Vec::new();
+
+                    for neighbor in cell.neighbors(grid) {
+                        if !neighbor.links().is_empty() {
+                            visited_neighors.push(neighbor);
+                        }
+                    }
+
+                    if cell.links().is_empty() && !visited_neighors.is_empty() {
+                        let index = random.gen_range(0..visited_neighors.len());
+                        let neighbor = *visited_neighors.get(index).unwrap();
+                        grid.link(cell.point, neighbor.point, true);
+                        current = Some(*cell);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Algorithm for RecursiveBacktracker {
+    fn on(&mut self, grid: &mut Grid) {
+        let mut random = rand::thread_rng();
+        let mut stack: Vec<Point> = Vec::new();
+        let random_cell = grid.random_cell().unwrap().clone();
+        stack.push(random_cell.point);
+
+        while !stack.is_empty() {
+            let current = stack.last();
+            let neighbors = grid
+                .neighbors(*current.unwrap())
+                .iter()
+                .map(|&p| grid.get(p).unwrap())
+                .filter(|&n| n.links().is_empty())
+                .map(|&n| n.point)
+                .collect::<Vec<Point>>();
+
+            if neighbors.is_empty() {
+                stack.pop();
+            } else {
+                let index = random.gen_range(0..neighbors.len());
+                let neighbor = *neighbors.get(index).unwrap();
+
+                grid.link(*current.unwrap(), neighbor, true);
+                stack.push(grid.get(neighbor).unwrap().point);
             }
         }
     }
