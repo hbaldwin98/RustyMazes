@@ -8,6 +8,7 @@ pub struct Distances {
     cells: HashMap<Point, usize>,
 }
 
+#[allow(dead_code)]
 impl Distances {
     pub fn new(root: Point) -> Self {
         let mut cells = HashMap::new();
@@ -36,7 +37,7 @@ impl Distances {
                     if self.cells.contains_key(&link) {
                         continue;
                     }
-
+                    
                     self.cells.insert(link, self.distance(point).unwrap() + 1);
                     new_frontier.push(link);
                 }
@@ -51,12 +52,16 @@ impl Distances {
     pub fn shortest_path_to(&self, grid: &Grid, goal: Point) -> Self {
         let mut current = goal;
         let mut breadcrumbs = Distances::new(self.root);
-        breadcrumbs.cells.insert(current, self.distance(current).unwrap());
+        breadcrumbs
+            .cells
+            .insert(current, self.distance(current).unwrap());
 
         while current != self.root {
             for neighbor in grid.get(current).unwrap().links() {
                 if self.distance(neighbor) < self.distance(current) {
-                    breadcrumbs.cells.insert(neighbor, self.distance(neighbor).unwrap());
+                    breadcrumbs
+                        .cells
+                        .insert(neighbor, self.distance(neighbor).unwrap());
                     current = neighbor;
                     break;
                 }
@@ -71,7 +76,11 @@ impl Distances {
         let mut max_point = self.root;
 
         for cell in grid.iter() {
-            let distance = self.distance(cell.point).unwrap();
+            let distance = if let Some(distance) = self.distance(cell.point) {
+                distance
+            } else {
+                continue;
+            };
 
             if distance > max_distance {
                 max_distance = distance;
@@ -82,4 +91,3 @@ impl Distances {
         return (max_distance, max_point);
     }
 }
-

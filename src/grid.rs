@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::{path::Path, slice::ChunksExact};
 
 use crate::prelude::*;
 
@@ -117,7 +117,7 @@ impl Cell {
 pub struct Grid {
     pub width: usize,
     pub height: usize,
-    pub cells: Vec<Cell>,
+    pub cells: Vec<Option<Cell>>,
     pub distances: Distances,
 }
 
@@ -128,7 +128,7 @@ impl Grid {
 
         for y in 0..height {
             for x in 0..width {
-                cells.push(Cell::new(Point::new(x as i32, y as i32)));
+                cells.push(Some(Cell::new(Point::new(x as i32, y as i32))));
             }
         }
 
@@ -145,7 +145,9 @@ impl Grid {
         let index_b = self.point_to_index(b);
 
         if let Some(index_a) = index_a {
-            self.cells[index_a].link(b);
+            if let Some(cell_a) = self.cells[index_a].as_mut() {
+                cell_a.link(b);
+            }
         }
 
         if !bidi {
@@ -153,7 +155,9 @@ impl Grid {
         }
 
         if let Some(index_b) = index_b {
-            self.cells[index_b].link(a);
+            if let Some(cell_b) = self.cells[index_b].as_mut() {
+                cell_b.link(a);
+            }
         }
     }
 
@@ -197,37 +201,59 @@ impl Grid {
     }
 
     pub fn get(&self, point: Point) -> Option<&Cell> {
-        return self.cells.iter().find(|&cell| cell.point == point);
+        let cell = self.iter().find(|&cell| cell.point == point);
+
+        if let Some(cell) = cell {
+            return Some(cell);
+        }
+
+        return None;
     }
 
     pub fn get_mut(&mut self, point: Point) -> Option<&mut Cell> {
-        return self.cells.iter_mut().find(|cell| cell.point == point);
+        let cell = self
+            .cells
+            .iter_mut()
+            .find(|cell| cell.unwrap().point == point);
+
+        if let Some(cell) = cell {
+            return cell.as_mut();
+        }
+
+        return None;
     }
 
     pub fn dead_ends(&self) -> Vec<&Cell> {
         return self
             .cells
             .iter()
-            .filter(|cell| cell.links().len() == 1)
+            .filter(|cell| cell.unwrap().links().len() == 1)
+            .map(|cell| cell.as_ref().unwrap())
             .collect();
     }
 
     pub fn random_cell(&self) -> Option<&Cell> {
         let index = rand::thread_rng().gen_range(0..self.cells.len());
+        let mut cell = self.cells.get(index).unwrap();
 
-        return self.cells.get(index);
+        while cell.is_none() {
+            let index = rand::thread_rng().gen_range(0..self.cells.len());
+            cell = self.cells.get(index).unwrap();
+        }
+
+        return Some(cell.as_ref().unwrap());
     }
 
-    pub fn iter_rows(&self) -> std::slice::ChunksExact<Cell> {
-        return self.cells.chunks_exact(self.width);
+    pub fn iter_rows(&self) -> ChunksExact<'_, Option<Cell>> {
+        self.cells.chunks_exact(self.width)
     }
 
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<Cell> {
-        return self.cells.iter_mut();
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Cell> {
+        self.cells.iter_mut().filter_map(|c| c.as_mut())
     }
 
-    pub fn iter(&self) -> std::slice::Iter<Cell> {
-        return self.cells.iter();
+    pub fn iter(&self) -> impl Iterator<Item = &Cell> {
+        self.cells.iter().filter_map(|c| c.as_ref())
     }
 
     pub fn point_to_index(&self, point: Point) -> Option<usize> {
@@ -251,10 +277,10 @@ impl Grid {
             return;
         }
 
-        self.cells[index.unwrap()] = cell;
+        self.cells[index.unwrap()] = Some(cell);
     }
 
-    pub fn draw(&self) {
+    pub fn draw(&self, include_distances: bool) {
         let mut output = String::from("+");
         output.push_str("---+".repeat(self.width).as_str());
         output.push('\n');
@@ -264,8 +290,17 @@ impl Grid {
             let mut bottom = String::from("+");
 
             for cell in row {
-                let body = format!(" {} ", self.contents_of(cell.clone()));
-                let east_boundary = if cell.linked(self.get(cell.east.point.clone())) {
+                let mut body = format!(" {} ", self.contents_of(*cell));
+
+                if !include_distances {
+                    body = String::from("   ");
+                }
+
+                let east_boundary = if cell.is_some()
+                    && cell
+                        .unwrap()
+                        .linked(self.get(cell.unwrap().east.point.clone()))
+                {
                     " "
                 } else {
                     "|"
@@ -273,7 +308,11 @@ impl Grid {
                 top.push_str(body.as_str());
                 top.push_str(east_boundary);
 
-                let south_boundary = if cell.linked(self.get(cell.south.point.clone())) {
+                let south_boundary = if cell.is_some()
+                    && cell
+                        .unwrap()
+                        .linked(self.get(cell.unwrap().south.point.clone()))
+                {
                     "   "
                 } else {
                     "---"
@@ -292,11 +331,13 @@ impl Grid {
         println!("{}", output);
     }
 
-    pub fn contents_of(&self, cell: Cell) -> String {
-        let distance = self.distances.distance(cell.point);
+    pub fn contents_of(&self, cell: Option<Cell>) -> String {
+        if let Some(cell) = cell {
+            let distance = self.distances.distance(cell.point);
 
-        if distance.is_some() {
-            return Grid::format_radix(distance.unwrap() as u128, 36);
+            if distance.is_some() {
+                return Grid::format_radix(distance.unwrap() as u128, 36);
+            }
         }
 
         return String::from(" ");
@@ -310,6 +351,11 @@ impl Grid {
         }
 
         let (max_distance, _) = self.distances.max(self);
+
+        if max_distance == 0 {
+            return BLACK;
+        }
+
         let intensity = (max_distance - distance.unwrap()) as f64 / max_distance as f64;
         let dark = (255.0 * intensity) as u8;
         let bright = 128 + (127.0 * intensity) as u8;
@@ -318,13 +364,13 @@ impl Grid {
         return color;
     }
 
-    pub fn to_png(&self, size: usize) {
+    pub fn to_png(&self, size: usize) -> image::ImageBuffer<image::Rgb<u8>, Vec<u8>> {
         let img_width = self.width * size + 1;
         let img_height = self.height * size + 1;
 
         let mut imgbuf =
             image::ImageBuffer::from_fn(img_width as u32, img_height as u32, |_, _| {
-                return WHITE;
+                return BLACK;
             });
 
         for mode in vec!["background", "walls"] {
@@ -346,25 +392,25 @@ impl Grid {
                 } else {
                     if !cell.linked(self.get(cell.north.point.clone())) {
                         for x in x1..x2 {
-                            imgbuf.put_pixel(x as u32, y1 as u32, BLACK);
+                            imgbuf.put_pixel(x as u32, y1 as u32, WHITE);
                         }
                     }
 
                     if !cell.linked(self.get(cell.west.point.clone())) {
                         for y in y1..y2 {
-                            imgbuf.put_pixel(x1 as u32, y as u32, BLACK);
+                            imgbuf.put_pixel(x1 as u32, y as u32, WHITE);
                         }
                     }
 
                     if !cell.linked(self.get(cell.east.point.clone())) {
                         for y in y1..y2 {
-                            imgbuf.put_pixel(x2 as u32, y as u32, BLACK);
+                            imgbuf.put_pixel(x2 as u32, y as u32, WHITE);
                         }
                     }
 
                     if !cell.linked(self.get(cell.south.point.clone())) {
                         for x in x1..x2 {
-                            imgbuf.put_pixel(x as u32, y2 as u32, BLACK);
+                            imgbuf.put_pixel(x as u32, y2 as u32, WHITE);
                         }
                     }
                 }
@@ -378,15 +424,37 @@ impl Grid {
             BLACK,
         );
 
-        let path = Path::new("maze.png");
-        let _ = imgbuf.save(path).unwrap();
+        return imgbuf;
     }
 }
 
-impl Iterator for Grid {
-    type Item = Cell;
+impl Maskable for Grid {
+    fn from_mask(mask: &Mask) -> Self {
+        let mut grid = Grid::new(mask.width, mask.height);
+        grid.mask(mask);
 
-    fn next(&mut self) -> Option<Self::Item> {
-        return self.cells.pop();
+        // return the first true cell
+        let mut start = None;
+        for (i, cell) in grid.cells.iter().enumerate() {
+            if cell.is_some() {
+                start = Some(i);
+                break;
+            }
+        }
+
+        if let Some(start) = start {
+            let point = Point::new((start % grid.width) as i32, (start / grid.width) as i32);
+            grid.distances = Distances::new(point);
+        }
+
+        return grid;
+    }
+
+    fn mask(&mut self, mask: &Mask) {
+        for (i, value) in mask.mask.iter().enumerate() {
+            if !value {
+                self.cells[i] = None;
+            }
+        }
     }
 }

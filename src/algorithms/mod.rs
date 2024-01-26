@@ -49,23 +49,25 @@ impl Algorithm for Sidewinder {
             let mut run = Vec::new();
 
             for cell in row.iter() {
-                run.push(cell);
+                if let Some(cell) = cell {
+                    run.push(cell);
 
-                let at_eastern_boundary = cell.east.point.x == (grid.width as i32);
-                let at_northern_boundary = cell.north.point.y <= 0;
+                    let at_eastern_boundary = cell.east.point.x == (grid.width as i32);
+                    let at_northern_boundary = cell.north.point.y <= 0;
 
-                let should_close_out =
-                    at_eastern_boundary || (!at_northern_boundary && random.gen_bool(0.5));
+                    let should_close_out =
+                        at_eastern_boundary || (!at_northern_boundary && random.gen_bool(0.5));
 
-                if should_close_out {
-                    let index = random.gen_range(0..run.len());
-                    let member = run.get(index).unwrap();
-                    let north = member.north.point;
+                    if should_close_out {
+                        let index = random.gen_range(0..run.len());
+                        let member = run.get(index).unwrap();
+                        let north = member.north.point;
 
-                    actions.push((member.point.clone(), north.clone()));
-                    run.clear();
-                } else {
-                    actions.push((cell.point.clone(), cell.east.point.clone()));
+                        actions.push((member.point.clone(), north.clone()));
+                        run.clear();
+                    } else {
+                        actions.push((cell.point.clone(), cell.east.point.clone()));
+                    }
                 }
             }
         }
@@ -100,7 +102,13 @@ impl Algorithm for AldousBroder {
 
 impl Algorithm for Wilsons {
     fn on(&mut self, grid: &mut Grid) {
-        let mut unvisited = grid.cells.clone();
+        let mut unvisited = grid
+            .cells
+            .iter()
+            .filter(|c| c.is_some())
+            .map(|c| c.unwrap())
+            .collect::<Vec<Cell>>()
+            .clone();
         let mut random = rand::thread_rng();
         let index = random.gen_range(0..unvisited.len());
 
@@ -153,7 +161,12 @@ impl Algorithm for HuntAndKill {
                 grid.link(current.unwrap().point, neighbor.point, true);
                 current = Some(neighbor);
             } else {
-                let cells = grid.cells.clone();
+                let cells = grid
+                    .cells
+                    .iter()
+                    .filter(|x| x.is_some())
+                    .map(|x| x.unwrap())
+                    .collect::<Vec<Cell>>();
 
                 current = None;
 
