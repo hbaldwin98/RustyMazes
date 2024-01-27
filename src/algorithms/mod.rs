@@ -1,36 +1,48 @@
 use crate::prelude::*;
 
-pub struct BinaryTree;
-pub struct Sidewinder;
-pub struct AldousBroder;
-pub struct Wilsons;
-pub struct HuntAndKill;
-pub struct RecursiveBacktracker;
-
-pub trait Algorithm {
-    fn on(&mut self, grid: &mut Grid);
+pub enum Algorithm {
+    BinaryTree,
+    Sidewinder,
+    AldousBroder,
+    Wilsons,
+    HuntAndKill,
+    RecursiveBacktracker,
+    None,
 }
 
-impl Algorithm for BinaryTree {
-    fn on(&mut self, grid: &mut Grid) {
+impl Algorithm {
+    pub fn on(&mut self, grid: &mut dyn Grid) {
+        match self {
+            Algorithm::BinaryTree => self.binary_tree(grid),
+            Algorithm::Sidewinder => self.sidewinder(grid),
+            Algorithm::AldousBroder => self.aldous_broder(grid),
+            Algorithm::Wilsons => self.wilsons(grid),
+            Algorithm::HuntAndKill => self.hunt_and_kill(grid),
+            Algorithm::RecursiveBacktracker => self.recursive_backtracker(grid),
+            Algorithm::None => {}
+        }
+    }
+
+    fn binary_tree(&mut self, grid: &mut dyn Grid) {
         let mut actions = Vec::new();
-        for cell in grid.iter() {
+        for cell in grid.cells().iter() {
             let mut neighbors = Vec::new();
+            if let Some(cell) = cell {
+                if let Some(north) = grid.get(cell.north.point.clone()) {
+                    neighbors.push(north);
+                }
 
-            if let Some(north) = grid.get(cell.north.point.clone()) {
-                neighbors.push(north);
-            }
+                if let Some(east) = grid.get(cell.east.point.clone()) {
+                    neighbors.push(east);
+                }
 
-            if let Some(east) = grid.get(cell.east.point.clone()) {
-                neighbors.push(east);
-            }
+                if !neighbors.is_empty() {
+                    let index = rand::thread_rng().gen_range(0..neighbors.len());
+                    let neighbor_point = neighbors[index].point.clone();
+                    let cell_point = cell.point.clone();
 
-            if !neighbors.is_empty() {
-                let index = rand::thread_rng().gen_range(0..neighbors.len());
-                let neighbor_point = neighbors[index].point.clone();
-                let cell_point = cell.point.clone();
-
-                actions.push((cell_point, neighbor_point));
+                    actions.push((cell_point, neighbor_point));
+                }
             }
         }
 
@@ -38,10 +50,8 @@ impl Algorithm for BinaryTree {
             grid.link(*cell_point, *neighbor_point, true);
         }
     }
-}
 
-impl Algorithm for Sidewinder {
-    fn on(&mut self, grid: &mut Grid) {
+    fn sidewinder(&mut self, grid: &mut dyn Grid) {
         let mut random = rand::thread_rng();
         let mut actions = Vec::new();
 
@@ -52,7 +62,7 @@ impl Algorithm for Sidewinder {
                 if let Some(cell) = cell {
                     run.push(cell);
 
-                    let at_eastern_boundary = cell.east.point.x == (grid.width as i32);
+                    let at_eastern_boundary = cell.east.point.x == (grid.width() as i32);
                     let at_northern_boundary = cell.north.point.y <= 0;
 
                     let should_close_out =
@@ -76,14 +86,12 @@ impl Algorithm for Sidewinder {
             grid.link(*cell_point, *neighbor_point, true);
         }
     }
-}
 
-impl Algorithm for AldousBroder {
-    fn on(&mut self, grid: &mut Grid) {
+    fn aldous_broder(&mut self, grid: &mut dyn Grid) {
         let mut random = rand::thread_rng();
 
         let mut cell = *grid.random_cell().unwrap();
-        let mut unvisited = grid.width * grid.height - 1;
+        let mut unvisited = grid.width() * grid.height() - 1;
 
         while unvisited > 0 {
             let neighbors = cell.neighbors(grid);
@@ -98,17 +106,16 @@ impl Algorithm for AldousBroder {
             cell = neighbor.clone();
         }
     }
-}
 
-impl Algorithm for Wilsons {
-    fn on(&mut self, grid: &mut Grid) {
+    fn wilsons(&mut self, grid: &mut dyn Grid) {
         let mut unvisited = grid
-            .cells
+            .cells()
             .iter()
             .filter(|c| c.is_some())
             .map(|c| c.unwrap())
             .collect::<Vec<Cell>>()
             .clone();
+
         let mut random = rand::thread_rng();
         let index = random.gen_range(0..unvisited.len());
 
@@ -138,10 +145,8 @@ impl Algorithm for Wilsons {
             }
         }
     }
-}
 
-impl Algorithm for HuntAndKill {
-    fn on(&mut self, grid: &mut Grid) {
+    fn hunt_and_kill(&mut self, grid: &mut dyn Grid) {
         let mut random = rand::thread_rng();
         let mut current = Some(*grid.random_cell().unwrap());
 
@@ -162,7 +167,7 @@ impl Algorithm for HuntAndKill {
                 current = Some(neighbor);
             } else {
                 let cells = grid
-                    .cells
+                    .cells()
                     .iter()
                     .filter(|x| x.is_some())
                     .map(|x| x.unwrap())
@@ -190,10 +195,8 @@ impl Algorithm for HuntAndKill {
             }
         }
     }
-}
 
-impl Algorithm for RecursiveBacktracker {
-    fn on(&mut self, grid: &mut Grid) {
+    fn recursive_backtracker(&mut self, grid: &mut dyn Grid) {
         let mut random = rand::thread_rng();
         let mut stack: Vec<Point> = Vec::new();
         let random_cell = grid.random_cell().unwrap().clone();

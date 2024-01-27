@@ -8,6 +8,11 @@ pub struct Mask {
     pub height: usize,
 }
 
+pub trait Maskable {
+    fn mask(&mut self, mask: &Mask);
+    fn from_mask(mask: &Mask) -> Self;
+}
+
 impl Mask {
     pub fn new(width: usize, height: usize) -> Self {
         Self {
@@ -63,7 +68,3 @@ impl Mask {
     }
 }
 
-pub trait Maskable {
-    fn mask(&mut self, mask: &Mask);
-    fn from_mask(mask: &Mask) -> Self;
-}

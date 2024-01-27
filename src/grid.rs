@@ -1,151 +1,54 @@
-use std::{path::Path, slice::ChunksExact};
+use std::{
+    fmt::Display,
+    ops::{Index, IndexMut},
+    slice::ChunksExact,
+};
 
 use crate::prelude::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NeighborPoint {
-    pub point: Point,
-    pub linked: bool,
-}
+impl Iterator for dyn Grid {
+    type Item = Cell;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Cell {
-    pub point: Point,
-    pub north: NeighborPoint,
-    pub east: NeighborPoint,
-    pub south: NeighborPoint,
-    pub west: NeighborPoint,
-}
-
-#[allow(dead_code)]
-impl Cell {
-    pub fn new(point: Point) -> Self {
-        Self {
-            point,
-            north: NeighborPoint {
-                point: point + Point::new(0, -1),
-                linked: false,
-            },
-            east: NeighborPoint {
-                point: point + Point::new(1, 0),
-                linked: false,
-            },
-            south: NeighborPoint {
-                point: point + Point::new(0, 1),
-                linked: false,
-            },
-            west: NeighborPoint {
-                point: point + Point::new(-1, 0),
-                linked: false,
-            },
-        }
-    }
-
-    pub fn link(&mut self, other_position: Point) {
-        let point = other_position - self.point;
-        let x = point.x;
-        let y = point.y;
-
-        match (x, y) {
-            (0, -1) => {
-                self.north.linked = true;
-            }
-            (0, 1) => {
-                self.south.linked = true;
-            }
-            (1, 0) => {
-                self.east.linked = true;
-            }
-            (-1, 0) => {
-                self.west.linked = true;
-            }
-            _ => panic!("Invalid point"),
-        }
-    }
-
-    pub fn links(&self) -> Vec<Point> {
-        let mut links = Vec::new();
-
-        if self.north.linked {
-            links.push(self.north.point);
-        }
-        if self.south.linked {
-            links.push(self.south.point);
-        }
-        if self.east.linked {
-            links.push(self.east.point);
-        }
-        if self.west.linked {
-            links.push(self.west.point);
-        }
-
-        return links;
-    }
-
-    pub fn linked(&self, other: Option<&Cell>) -> bool {
-        if other.is_none() {
-            return false;
-        }
-
-        return self.links().contains(&other.unwrap().point);
-    }
-
-    pub fn neighbors(&self, grid: &Grid) -> Vec<Cell> {
-        let mut neighbors = Vec::new();
-
-        if let Some(north) = grid.get(self.north.point) {
-            neighbors.push(north.clone());
-        }
-
-        if let Some(south) = grid.get(self.south.point) {
-            neighbors.push(south.clone());
-        }
-
-        if let Some(east) = grid.get(self.east.point) {
-            neighbors.push(east.clone());
-        }
-
-        if let Some(west) = grid.get(self.west.point) {
-            neighbors.push(west.clone());
-        }
-
-        return neighbors;
+    fn next(&mut self) -> Option<Self::Item> {
+        return None;
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Grid {
-    pub width: usize,
-    pub height: usize,
-    pub cells: Vec<Option<Cell>>,
-    pub distances: Distances,
+impl Index<usize> for dyn Grid {
+    type Output = Option<Cell>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        return &self.cells()[index];
+    }
 }
 
-#[allow(dead_code)]
-impl Grid {
-    pub fn new(width: usize, height: usize) -> Self {
-        let mut cells = Vec::with_capacity(width * height);
+impl Index<Point> for dyn Grid {
+    type Output = Option<Cell>;
 
-        for y in 0..height {
-            for x in 0..width {
-                cells.push(Some(Cell::new(Point::new(x as i32, y as i32))));
-            }
-        }
-
-        Self {
-            width,
-            height,
-            cells,
-            distances: Distances::new(Point::new(0, 0)),
-        }
+    fn index(&self, index: Point) -> &Self::Output {
+        return &self.cells()[self.point_to_index(index).unwrap()];
     }
+}
 
-    pub fn link(&mut self, a: Point, b: Point, bidi: bool) {
+impl IndexMut<usize> for dyn Grid {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        return &mut self.cells_mut()[index];
+    }
+}
+
+pub trait Grid {
+    fn cells(&self) -> &Vec<Option<Cell>>;
+    fn cells_mut(&mut self) -> &mut Vec<Option<Cell>>;
+
+    fn width(&self) -> usize;
+    fn height(&self) -> usize;
+
+    fn link(&mut self, a: Point, b: Point, bidi: bool) {
         let index_a = self.point_to_index(a);
         let index_b = self.point_to_index(b);
 
         if let Some(index_a) = index_a {
-            if let Some(cell_a) = self.cells[index_a].as_mut() {
+            if let Some(cell_a) = self.cells_mut()[index_a].as_mut() {
                 cell_a.link(b);
             }
         }
@@ -155,13 +58,13 @@ impl Grid {
         }
 
         if let Some(index_b) = index_b {
-            if let Some(cell_b) = self.cells[index_b].as_mut() {
+            if let Some(cell_b) = self.cells_mut()[index_b].as_mut() {
                 cell_b.link(a);
             }
         }
     }
 
-    pub fn neighbors(&self, point: Point) -> Vec<Point> {
+    fn neighbors(&self, point: Point) -> Vec<Point> {
         let mut neighbors = Vec::new();
 
         if let Some(north) = self.get(point.north()) {
@@ -183,6 +86,77 @@ impl Grid {
         return neighbors;
     }
 
+    fn get(&self, point: Point) -> Option<&Cell> {
+        let cell = self
+            .cells()
+            .iter()
+            .filter_map(|c| c.as_ref())
+            .find(|&cell| cell.point == point);
+
+        if let Some(cell) = cell {
+            return Some(cell);
+        }
+
+        return None;
+    }
+
+    fn random_cell(&self) -> Option<&Cell> {
+        let index = rand::thread_rng().gen_range(0..self.cells().len());
+        let mut cell = self.cells().get(index).unwrap();
+
+        while cell.is_none() {
+            let index = rand::thread_rng().gen_range(0..self.cells().len());
+            cell = self.cells().get(index).unwrap();
+        }
+
+        return Some(cell.as_ref().unwrap());
+    }
+
+    fn iter_rows(&self) -> ChunksExact<'_, Option<Cell>> {
+        self.cells().chunks_exact(self.width())
+    }
+
+    fn point_to_index(&self, point: Point) -> Option<usize> {
+        if point.x < 0 || point.y < 0 {
+            return None;
+        }
+
+        let index = (point.y * self.width() as i32 + point.x) as usize;
+
+        if index >= self.cells().len() {
+            return None;
+        }
+
+        return Some(index);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RectangularGrid {
+    pub width: usize,
+    pub height: usize,
+    pub cells: Vec<Option<Cell>>,
+    pub distances: Distances,
+}
+
+impl RectangularGrid {
+    fn new(width: usize, height: usize) -> Self {
+        let mut cells = Vec::with_capacity(width * height);
+
+        for y in 0..height {
+            for x in 0..width {
+                cells.push(Some(Cell::new(Point::new(x as i32, y as i32))));
+            }
+        }
+
+        Self {
+            width,
+            height,
+            cells,
+            distances: Distances::new(Point::new(0, 0)),
+        }
+    }
+
     fn format_radix(mut x: u128, radix: u32) -> String {
         let mut result = vec![];
 
@@ -200,87 +174,87 @@ impl Grid {
         return result.into_iter().rev().collect();
     }
 
-    pub fn get(&self, point: Point) -> Option<&Cell> {
-        let cell = self.iter().find(|&cell| cell.point == point);
-
+    fn contents_of(&self, cell: Option<Cell>) -> String {
         if let Some(cell) = cell {
-            return Some(cell);
+            let distance = self.distances.distance(cell.point);
+
+            if distance.is_some() {
+                return RectangularGrid::format_radix(distance.unwrap() as u128, 36);
+            }
         }
 
-        return None;
+        return String::from(" ");
+    }
+}
+
+impl Grid for RectangularGrid {
+    fn cells(&self) -> &Vec<Option<Cell>> {
+        self.cells.as_ref()
     }
 
-    pub fn get_mut(&mut self, point: Point) -> Option<&mut Cell> {
-        let cell = self
-            .cells
-            .iter_mut()
-            .find(|cell| cell.unwrap().point == point);
+    fn cells_mut(&mut self) -> &mut Vec<Option<Cell>> {
+        self.cells.as_mut()
+    }
 
-        if let Some(cell) = cell {
-            return cell.as_mut();
+    fn width(&self) -> usize {
+        self.width
+    }
+
+    fn height(&self) -> usize {
+        self.height
+    }
+}
+
+impl Drawable for RectangularGrid {
+    fn to_grid_image(&self, size: usize) -> image::ImageBuffer<image::Rgb<u8>, Vec<u8>> {
+        let img_width = self.width * size + 1;
+        let img_height = self.height * size + 1;
+
+        let mut imgbuf =
+            image::ImageBuffer::from_fn(img_width as u32, img_height as u32, |_, _| {
+                return BLACK;
+            });
+
+        for mode in vec!["background", "walls"] {
+            for cell in self.cells.iter() {
+                if let Some(cell) = cell {
+                    let (x1, x2, y1, y2) = (
+                        cell.point.x * size as i32,
+                        (cell.point.x + 1) * size as i32,
+                        cell.point.y * size as i32,
+                        (cell.point.y + 1) * size as i32,
+                    );
+
+                    if mode == "background" {
+                        let color = self.background_color_for(cell, &self.distances);
+                        RectangularGrid::draw_line(&mut imgbuf, x1, y1, x2, y2, color);
+                    } else {
+                        if !cell.linked(self.get(cell.north.point.clone())) {
+                            RectangularGrid::draw_line(&mut imgbuf, x1, y1, x2, y1, WHITE);
+                        }
+
+                        if !cell.linked(self.get(cell.west.point.clone())) {
+                            RectangularGrid::draw_line(&mut imgbuf, x1, y1, x1, y2, WHITE);
+                        }
+
+                        if !cell.linked(self.get(cell.east.point.clone())) {
+                            RectangularGrid::draw_line(&mut imgbuf, x2, y1, x2, y2, WHITE);
+                        }
+
+                        if !cell.linked(self.get(cell.south.point.clone())) {
+                            RectangularGrid::draw_line(&mut imgbuf, x1, y2, x2, y2, WHITE);
+                        }
+                    }
+                }
+            }
         }
 
-        return None;
+        return imgbuf;
     }
+}
 
-    pub fn dead_ends(&self) -> Vec<&Cell> {
-        return self
-            .cells
-            .iter()
-            .filter(|cell| cell.unwrap().links().len() == 1)
-            .map(|cell| cell.as_ref().unwrap())
-            .collect();
-    }
-
-    pub fn random_cell(&self) -> Option<&Cell> {
-        let index = rand::thread_rng().gen_range(0..self.cells.len());
-        let mut cell = self.cells.get(index).unwrap();
-
-        while cell.is_none() {
-            let index = rand::thread_rng().gen_range(0..self.cells.len());
-            cell = self.cells.get(index).unwrap();
-        }
-
-        return Some(cell.as_ref().unwrap());
-    }
-
-    pub fn iter_rows(&self) -> ChunksExact<'_, Option<Cell>> {
-        self.cells.chunks_exact(self.width)
-    }
-
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Cell> {
-        self.cells.iter_mut().filter_map(|c| c.as_mut())
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &Cell> {
-        self.cells.iter().filter_map(|c| c.as_ref())
-    }
-
-    pub fn point_to_index(&self, point: Point) -> Option<usize> {
-        if point.x < 0 || point.y < 0 {
-            return None;
-        }
-
-        let index = (point.y * self.width as i32 + point.x) as usize;
-
-        if index >= self.cells.len() {
-            return None;
-        }
-
-        return Some(index);
-    }
-
-    pub fn update_cell(&mut self, cell: Cell) {
-        let index = self.point_to_index(cell.point);
-
-        if index.is_none() {
-            return;
-        }
-
-        self.cells[index.unwrap()] = Some(cell);
-    }
-
-    pub fn draw(&self, include_distances: bool) {
+impl Display for RectangularGrid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output = String::from("+");
         output.push_str("---+".repeat(self.width).as_str());
         output.push('\n');
@@ -290,11 +264,7 @@ impl Grid {
             let mut bottom = String::from("+");
 
             for cell in row {
-                let mut body = format!(" {} ", self.contents_of(*cell));
-
-                if !include_distances {
-                    body = String::from("   ");
-                }
+                let body = format!(" {} ", self.contents_of(*cell));
 
                 let east_boundary = if cell.is_some()
                     && cell
@@ -328,109 +298,144 @@ impl Grid {
             output.push_str("\n");
         }
 
-        println!("{}", output);
+        write!(f, "{}", output)
     }
+}
 
-    pub fn contents_of(&self, cell: Option<Cell>) -> String {
-        if let Some(cell) = cell {
-            let distance = self.distances.distance(cell.point);
+impl Maskable for RectangularGrid {
+    fn from_mask(mask: &Mask) -> Self {
+        let mut grid = RectangularGrid::new(mask.width, mask.height);
+        grid.mask(mask);
 
-            if distance.is_some() {
-                return Grid::format_radix(distance.unwrap() as u128, 36);
+        // return the first true cell
+        let mut start = None;
+        for (i, cell) in grid.cells.iter().enumerate() {
+            if cell.is_some() {
+                start = Some(i);
+                break;
             }
         }
 
-        return String::from(" ");
-    }
-
-    pub fn background_color_for(&self, cell: &Cell) -> Rgb<u8> {
-        let distance = self.distances.distance(cell.point);
-
-        if distance.is_none() {
-            return BLACK;
+        if let Some(start) = start {
+            let point = Point::new((start % grid.width) as i32, (start / grid.width) as i32);
+            grid.distances = Distances::new(point);
         }
 
-        let (max_distance, _) = self.distances.max(self);
-
-        if max_distance == 0 {
-            return BLACK;
-        }
-
-        let intensity = (max_distance - distance.unwrap()) as f64 / max_distance as f64;
-        let dark = (255.0 * intensity) as u8;
-        let bright = 128 + (127.0 * intensity) as u8;
-        let color = image::Rgb([dark, bright, dark]);
-
-        return color;
+        return grid;
     }
 
-    pub fn to_png(&self, size: usize) -> image::ImageBuffer<image::Rgb<u8>, Vec<u8>> {
-        let img_width = self.width * size + 1;
-        let img_height = self.height * size + 1;
+    fn mask(&mut self, mask: &Mask) {
+        for (i, value) in mask.mask.iter().enumerate() {
+            if !value {
+                self.cells[i] = None;
+            }
+        }
+    }
+}
 
-        let mut imgbuf =
-            image::ImageBuffer::from_fn(img_width as u32, img_height as u32, |_, _| {
-                return BLACK;
-            });
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PolarGrid {
+    pub width: usize,
+    pub height: usize,
+    pub cells: Vec<Option<Cell>>,
+    pub distances: Distances,
+}
 
-        for mode in vec!["background", "walls"] {
-            for cell in self.iter() {
-                let (x1, x2, y1, y2) = (
-                    cell.point.x * size as i32,
-                    (cell.point.x + 1) * size as i32,
-                    cell.point.y * size as i32,
-                    (cell.point.y + 1) * size as i32,
-                );
+impl PolarGrid {
+    fn new(width: usize, height: usize) -> Self {
+        let mut cells = Vec::with_capacity(width * height);
 
-                if mode == "background" {
-                    let color = self.background_color_for(cell);
-                    for x in x1..x2 {
-                        for y in y1..y2 {
-                            imgbuf.put_pixel(x as u32, y as u32, color);
-                        }
-                    }
-                } else {
-                    if !cell.linked(self.get(cell.north.point.clone())) {
-                        for x in x1..x2 {
-                            imgbuf.put_pixel(x as u32, y1 as u32, WHITE);
-                        }
-                    }
+        for y in 0..height {
+            for x in 0..width {
+                cells.push(Some(Cell::new(Point::new(x as i32, y as i32))));
+            }
+        }
 
-                    if !cell.linked(self.get(cell.west.point.clone())) {
-                        for y in y1..y2 {
-                            imgbuf.put_pixel(x1 as u32, y as u32, WHITE);
-                        }
-                    }
+        Self {
+            width,
+            height,
+            cells,
+            distances: Distances::new(Point::new(0, 0)),
+        }
+    }
+}
 
-                    if !cell.linked(self.get(cell.east.point.clone())) {
-                        for y in y1..y2 {
-                            imgbuf.put_pixel(x2 as u32, y as u32, WHITE);
-                        }
-                    }
+impl Grid for PolarGrid {
+    fn cells(&self) -> &Vec<Option<Cell>> {
+        self.cells.as_ref()
+    }
 
-                    if !cell.linked(self.get(cell.south.point.clone())) {
-                        for x in x1..x2 {
-                            imgbuf.put_pixel(x as u32, y2 as u32, WHITE);
-                        }
-                    }
+    fn cells_mut(&mut self) -> &mut Vec<Option<Cell>> {
+        self.cells.as_mut()
+    }
+
+    fn width(&self) -> usize {
+        self.width
+    }
+
+    fn height(&self) -> usize {
+        self.height
+    }
+}
+
+impl Drawable for PolarGrid {
+    fn to_grid_image(&self, cell_size: usize) -> image::ImageBuffer<image::Rgb<u8>, Vec<u8>> {
+        let img_size = 2 * cell_size * self.height;
+
+        let mut imgbuf = image::ImageBuffer::new((img_size) as u32 + 1, (img_size) as u32 + 1);
+
+        let center = (img_size / 2) as i32;
+
+        for cell in self.cells.iter() {
+            if let Some(cell) = cell {
+                let cells_in_row = self
+                    .iter_rows()
+                    .nth(cell.point.y as usize)
+                    .filter(|c| !c.is_empty())
+                    .unwrap()
+                    .len() as i32;
+
+                let theta = 2.0 * std::f32::consts::PI / cells_in_row as f32;
+                let inner_radius = cell.point.y * cell_size as i32;
+                let outer_radius = (cell.point.y + 1) * cell_size as i32;
+
+                let theta_ccw = cell.point.x as f32 * theta;
+                let theta_cw = (cell.point.x + 1) as f32 * theta;
+
+                let ax = center + (inner_radius as f32 * theta_ccw.cos()).round() as i32;
+                let ay = center + (inner_radius as f32 * theta_ccw.sin()).round() as i32;
+                //let bx = center + (outer_radius as f32 * theta_ccw.cos()).round() as i32;
+                //let by = center + (outer_radius as f32 * theta_ccw.sin()).round() as i32;
+                let cx = center + (inner_radius as f32 * theta_cw.cos()).round() as i32;
+                let cy = center + (inner_radius as f32 * theta_cw.sin()).round() as i32;
+                let dx = center + (outer_radius as f32 * theta_cw.cos()).round() as i32;
+                let dy = center + (outer_radius as f32 * theta_cw.sin()).round() as i32;
+
+                if !cell.links().contains(&Point::north(&cell.point)) {
+                    RectangularGrid::draw_line(&mut imgbuf, ax, ay, cx, cy, WHITE);
+                }
+
+                if !cell.links().contains(&Point::east(&cell.point)) {
+                    RectangularGrid::draw_line(&mut imgbuf, cx, cy, dx, dy, WHITE);
                 }
             }
         }
 
-        // Put a pixel at the bottom right
-        imgbuf.put_pixel(
-            (self.width * size) as u32,
-            (self.height * size) as u32,
-            BLACK,
+        PolarGrid::circle(
+            &mut imgbuf,
+            center as u32,
+            center as u32,
+            self.height * cell_size,
+            WHITE,
         );
 
         return imgbuf;
     }
 }
 
-impl Maskable for Grid {
+impl Maskable for PolarGrid {
     fn from_mask(mask: &Mask) -> Self {
-        let mut grid = Grid::new(mask.width, mask.height);
+        let mut grid = PolarGrid::new(mask.width, mask.height);
         grid.mask(mask);
 
         // return the first true cell

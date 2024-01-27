@@ -7,29 +7,18 @@
 
 mod algorithms;
 mod distances;
+mod drawable;
 mod grid;
+mod cell;
 mod mask;
 mod point;
-
-macro_rules! name_of {
-    ($name:ident in $ty:ty) => {{
-        #[allow(dead_code)]
-        fn dummy(v: $ty) {
-            let _ = &v.$name;
-        }
-        stringify!($name)
-    }};
-
-    ($name:ident) => {{
-        let _ = &$name;
-        stringify!($name)
-    }};
-}
 
 mod prelude {
     pub use crate::algorithms::*;
     pub use crate::distances::*;
+    pub use crate::drawable::*;
     pub use crate::grid::*;
+    pub use crate::cell::*;
     pub use crate::mask::*;
     pub use crate::point::*;
 
@@ -40,7 +29,6 @@ mod prelude {
 
     pub const GRID_WIDTH: usize = 8;
     pub const GRID_HEIGHT: usize = 8;
-    pub const ALGORITHM: &str = name_of!(RecursiveBacktracker);
     pub const WHITE: Rgb<u8> = image::Rgb([255u8, 255u8, 255u8]);
     pub const BLACK: Rgb<u8> = image::Rgb([0u8, 0u8, 0u8]);
 
@@ -65,24 +53,31 @@ mod prelude {
             short,
             long,
             help = "The algorithm to apply. Not all masks will work properly with all algorithms.",
-            default_value = ALGORITHM,
+            default_value = "recursivebacktracker",
         )]
         pub algorithm: Option<String>,
         #[arg(short, long, help = "Output the maze as a PNG image.")]
         pub to_png: bool,
         #[arg(
+            short = 'p',
+            long,
+            help = "Output the maze as a polar coordinated PNG image (circle)."
+        )]
+        pub to_polar_png: bool,
+        #[arg(
             short,
             long,
             help = "Resolution of the output image.",
             requires = "to_png",
-            default_value = "16",
+            default_value = "16"
         )]
         pub resolution: Option<usize>,
         #[arg(
             short,
             long,
             help = "Show Dijkstra distances in output.",
-            requires = "output"
+            requires = "output",
+            default_value = "false"
         )]
         pub show_distances: bool,
         #[arg(short, long, help = "Show maze in output.", default_value = "false")]
@@ -92,14 +87,15 @@ mod prelude {
 
 use prelude::*;
 
-fn get_algorithm(name: &str) -> Box<dyn Algorithm> {
+fn get_algorithm(name: &str) -> Algorithm {
     match name.to_lowercase().as_str() {
-        "binarytree" => Box::new(BinaryTree),
-        "sidewinder" => Box::new(Sidewinder),
-        "aldousbroder" => Box::new(AldousBroder),
-        "wilsons" => Box::new(Wilsons),
-        "huntandkill" => Box::new(HuntAndKill),
-        "recursivebacktracker" => Box::new(RecursiveBacktracker),
+        "binarytree" => Algorithm::BinaryTree,
+        "sidewinder" => Algorithm::Sidewinder,
+        "aldousbroder" => Algorithm::AldousBroder,
+        "wilsons" => Algorithm::Wilsons,
+        "huntandkill" => Algorithm::HuntAndKill,
+        "recursivebacktracker" => Algorithm::RecursiveBacktracker,
+        "none" => Algorithm::None,
         _ => panic!("Algorithm not found"),
     }
 }
@@ -128,7 +124,7 @@ fn generate_maze(args: Args) {
         None => mask,
     };
 
-    let mut grid = Grid::from_mask(&mask);
+    let mut grid = RectangularGrid::from_mask(&mask);
     algorithm.on(&mut grid);
 
     if args.show_distances {
@@ -136,11 +132,23 @@ fn generate_maze(args: Args) {
     }
 
     if args.output {
-        grid.draw(args.show_distances);
+        println!("{}", grid);
     }
 
     if args.to_png {
         let path = Path::new("maze.png");
-        grid.to_png(args.resolution.unwrap()).save(path).unwrap();
+        grid.to_grid_image(args.resolution.unwrap())
+            .save(path)
+            .unwrap();
+    }
+
+    if args.to_polar_png {
+        let mut grid = PolarGrid::from_mask(&mask);
+        algorithm.on(&mut grid);
+
+        let path = Path::new("maze_polar.png");
+        grid.to_grid_image(args.resolution.unwrap())
+            .save(path)
+            .unwrap();
     }
 }

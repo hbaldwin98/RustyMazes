@@ -11,8 +11,7 @@ pub struct Distances {
 #[allow(dead_code)]
 impl Distances {
     pub fn new(root: Point) -> Self {
-        let mut cells = HashMap::new();
-        cells.insert(root, 0);
+        let cells = HashMap::new();
         Self { root, cells }
     }
 
@@ -20,12 +19,13 @@ impl Distances {
         return self.cells.get(&point).copied();
     }
 
-    pub fn compute(&mut self, grid: Grid) -> &mut Self {
+    pub fn compute<T: Grid>(&mut self, grid: T) -> &mut Self {
+        self.cells.insert(self.root, 0);
         let mut frontier = vec![self.root];
 
         while !frontier.is_empty() {
             let mut new_frontier = Vec::new();
-            
+
             for point in frontier {
                 let cell = grid.get(point);
 
@@ -37,7 +37,7 @@ impl Distances {
                     if self.cells.contains_key(&link) {
                         continue;
                     }
-                    
+
                     self.cells.insert(link, self.distance(point).unwrap() + 1);
                     new_frontier.push(link);
                 }
@@ -49,7 +49,7 @@ impl Distances {
         return self;
     }
 
-    pub fn shortest_path_to(&self, grid: &Grid, goal: Point) -> Self {
+    pub fn shortest_path_to<T: Grid>(&self, grid: &T, goal: Point) -> Self {
         let mut current = goal;
         let mut breadcrumbs = Distances::new(self.root);
         breadcrumbs
@@ -71,20 +71,22 @@ impl Distances {
         return breadcrumbs;
     }
 
-    pub fn max(&self, grid: &Grid) -> (usize, Point) {
+    pub fn max(&self, grid: &dyn Grid) -> (usize, Point) {
         let mut max_distance = 0;
         let mut max_point = self.root;
 
-        for cell in grid.iter() {
-            let distance = if let Some(distance) = self.distance(cell.point) {
-                distance
-            } else {
-                continue;
-            };
+        for cell in grid.cells().iter() {
+            if let Some(cell) = cell {
+                let distance = if let Some(distance) = self.distance(cell.point) {
+                    distance
+                } else {
+                    continue;
+                };
 
-            if distance > max_distance {
-                max_distance = distance;
-                max_point = cell.point;
+                if distance > max_distance {
+                    max_distance = distance;
+                    max_point = cell.point;
+                }
             }
         }
 
